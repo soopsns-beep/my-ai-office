@@ -78,6 +78,16 @@
 const MY_NAME = "사장님";
 const BOSS = { kind:"monkey", color:"#a0683a", shirt:"#ffffff", acc:["banana","tie"] };   // 나(사장) 캐릭터
 
+/* HQ에 떠 있는 도구 아이콘 (클릭하면 새 탭으로 열려요)
+   icon: note 노트 / folder 폴더 / calendar 달력 / chat 말풍선 / chart 차트 / mail 메일 / link 링크
+   url 을 내가 자주 쓰는 페이지 주소로 바꾸면 돼요 */
+const TOOLS = [
+  { name:"노션",   icon:"note",     url:"https://www.notion.so" },
+  { name:"드라이브", icon:"folder",   url:"https://drive.google.com" },
+  { name:"캘린더", icon:"calendar", url:"https://calendar.google.com" },
+  { name:"Claude", icon:"chat",     url:"https://claude.ai" },
+];
+
 const AGENTS = [
   { id:"ops",   name:"운영봇",     role:"운영 매니저",    kind:"dog",     color:"#f2c46d", shirt:"#7fd9c3", seat:"A", acc:["clipboard","bow"],
     intro:"일정 관리, 할 일 정리, 회의록 요약을 맡고 있어요.",
@@ -440,17 +450,57 @@ function nameTag(c){
   ctx.fillStyle=st[1];ctx.beginPath();ctx.arc(x+9,y,3.5,0,7);ctx.fill();
   ctx.fillStyle="#fff";ctx.fillText(t,x+16,y+1);
 }
+let placed=[];
 function bubble(c,t){
   if(!c.say||t>c.sayUntil)return;
-  ctx.font="13px sans-serif";const maxW=220, words=[...c.say];let lines=[],cur="";
-  for(const ch of words){if(ctx.measureText(cur+ch).width>maxW){lines.push(cur);cur=ch;}else cur+=ch;}lines.push(cur);
-  if(lines.length>5){lines=lines.slice(0,5);lines[4]=lines[4].slice(0,-1)+"…";}
+  ctx.font="13px sans-serif";const maxW=200;let lines=[],cur="";
+  for(const ch of [...c.say]){if(ctx.measureText(cur+ch).width>maxW){lines.push(cur);cur=ch;}else cur+=ch;}lines.push(cur);
+  if(lines.length>4){lines=lines.slice(0,4);lines[3]=lines[3].slice(0,-1)+"…";}
   const w=Math.max(...lines.map(l=>ctx.measureText(l).width))+20,h=lines.length*17+12;
-  let x=Math.min(Math.max(c.x-w/2,6),cv.width-w-6),y=c.y-74-h;if(y<4)y=4;
+  const top=c.y-((c.acc||[]).includes("banana")||c.kind==="bunny"?78:66);
+  let x=Math.min(Math.max(c.x-w/2,6),cv.width-w-6),y=top-h-6;
+  const hit=(X,Y)=>placed.some(p=>X<p.x+p.w+4&&X+w+4>p.x&&Y<p.y+p.h+4&&Y+h+4>p.y);
+  // 겹치지 않는 자리 중 원래 자리(머리 위)에서 가장 가까운 곳을 찾기
+  const x0=x,y0=Math.max(4,y);let best=null,bc=1e9;
+  for(const dx of [0,-50,50,-100,100,-150,150,-200,200,-260,260]){
+    const X=Math.min(Math.max(x0+dx,6),cv.width-w-6);
+    for(let Y=4;Y<=Math.min(cv.height-h-4,c.y+30);Y+=6){
+      const cost=Math.abs(X-x0)+Math.abs(Y-y0)*1.4+(Y>top?120:0);
+      if(cost<bc&&!hit(X,Y)){bc=cost;best=[X,Y];}}}
+  if(best){x=best[0];y=best[1];}else y=y0;
+  placed.push({x,y,w,h});
+  ctx.fillStyle="rgba(20,40,50,.18)";roundRect(x+2,y+3,w,h,10);ctx.fill();
   ctx.fillStyle="#fff";roundRect(x,y,w,h,10);ctx.fill();
-  ctx.beginPath();ctx.moveTo(c.x-6,y+h);ctx.lineTo(c.x+6,y+h);ctx.lineTo(c.x,y+h+7);ctx.fill();
-  ctx.fillStyle="#2b2140";ctx.textBaseline="top";lines.forEach((l,i)=>ctx.fillText(l,x+10,y+7+i*17));
+  const tx=Math.min(Math.max(c.x,x+12),x+w-12);
+  if(y+h<top){ctx.beginPath();ctx.moveTo(tx-6,y+h-1);ctx.lineTo(tx+6,y+h-1);ctx.lineTo(Math.min(Math.max(c.x,tx-10),tx+10),Math.min(y+h+8,top));ctx.fill();}
+  ctx.fillStyle=c===player?"#2b6370":"#2b2140";ctx.textBaseline="top";lines.forEach((l,i)=>ctx.fillText(l,x+10,y+7+i*17));
 }
+
+// ---------- HQ 도구 아이콘 ----------
+const TOOL_POS=[[11.8,5.15],[13.05,5.75],[16.95,5.75],[18.2,5.15]];
+const tools=TOOLS.slice(0,8).map((tl,i)=>{const p=TOOL_POS[i]||[11.8+i*1.2,6.6];return {...tl,x:p[0]*T,y:p[1]*T};});
+function toolIcon(kind,x,y){
+  const L="#33415a";
+  if(kind==="note"){R(x-6,y-7,12,14,"#fff");ctx.strokeStyle=L;ctx.lineWidth=1.4;ctx.strokeRect(x-6,y-7,12,14);for(let i=0;i<3;i++)R(x-4,y-3+i*3,8,1.2,L);R(x-6,y-7,12,3,L);}
+  else if(kind==="folder"){R(x-8,y-5,7,3,"#f2c14e");R(x-8,y-3,16,10,"#ffd34d");R(x-8,y-3,16,2,"#f2c14e");ctx.strokeStyle=L;ctx.lineWidth=1.2;ctx.strokeRect(x-8,y-3,16,10);}
+  else if(kind==="calendar"){R(x-7,y-6,14,13,"#fff");R(x-7,y-6,14,4,"#e86a6a");ctx.strokeStyle=L;ctx.lineWidth=1.2;ctx.strokeRect(x-7,y-6,14,13);R(x-4,y-8,2,4,L);R(x+2,y-8,2,4,L);for(let i=0;i<3;i++)for(let j=0;j<2;j++)R(x-5+i*4,y+j*3,2,2,j+i===2?"#e86a6a":"#9aa7c7");}
+  else if(kind==="chat"){ctx.fillStyle="#d9775c";roundRect(x-8,y-7,16,11,4);ctx.fill();ctx.beginPath();ctx.moveTo(x-3,y+4);ctx.lineTo(x-6,y+8);ctx.lineTo(x+1,y+4);ctx.fill();for(const d of [-4,0,4])C(x+d,y-1.5,1.3,"#fff");}
+  else if(kind==="chart"){R(x-7,y+5,14,1.5,L);[[-6,5],[-2,9],[2,6],[5,11]].forEach(([dx,hh],i)=>R(x+dx,y+5-hh,3,hh,i%2?"#7fd9c3":"#5fb3da"));}
+  else if(kind==="mail"){R(x-8,y-5,16,11,"#fff");ctx.strokeStyle=L;ctx.lineWidth=1.2;ctx.strokeRect(x-8,y-5,16,11);ctx.beginPath();ctx.moveTo(x-8,y-5);ctx.lineTo(x,y+1);ctx.lineTo(x+8,y-5);ctx.stroke();}
+  else{ctx.strokeStyle="#5fb3da";ctx.lineWidth=2.4;ctx.beginPath();ctx.arc(x-3,y+1,4,0,7);ctx.stroke();ctx.beginPath();ctx.arc(x+3,y-1,4,0,7);ctx.stroke();}
+}
+let hoverTool=null;
+function drawTools(t){
+  tools.forEach((tl,i)=>{const fy=tl.y+Math.sin(t/500+i*1.3)*2.5,hov=hoverTool===tl,s=hov?1.12:1;
+    ctx.fillStyle="rgba(20,40,50,.15)";ctx.beginPath();ctx.ellipse(tl.x,tl.y+20,9,3,0,0,7);ctx.fill();
+    ctx.save();ctx.translate(tl.x,fy);ctx.scale(s,s);
+    ctx.fillStyle=COUT;roundRect(-14,-14,28,28,8);ctx.fill();ctx.fillStyle=hov?"#e9fff8":"#ffffff";roundRect(-12.6,-12.6,25.2,25.2,7);ctx.fill();
+    ctx.fillStyle="rgba(127,217,195,.25)";roundRect(-12.6,4,25.2,8.6,6);ctx.fill();
+    toolIcon(tl.icon,0,-1);ctx.restore();
+    ctx.font="bold 9px sans-serif";const w=ctx.measureText(tl.name).width+10;
+    ctx.fillStyle="rgba(20,45,55,.85)";roundRect(tl.x-w/2,fy+16,w,13,6);ctx.fill();ctx.fillStyle="#fff";ctx.textBaseline="middle";ctx.textAlign="center";ctx.fillText(tl.name,tl.x,fy+23);ctx.textAlign="left";});
+}
+const toolAt=(x,y)=>tools.find(tl=>Math.abs(x-tl.x)<16&&y>tl.y-17&&y<tl.y+30);
 
 // ---------- 캐릭터 만들기 ----------
 const agents=AGENTS.map((a,i)=>{const s=SEATS[a.seat]||SEATS.A;return {...a,x:s.x*T,y:s.y*T,room:s.room,status:0,phase:i*1.7,history:[],seated:true,seatX:s.x*T,seatY:s.y*T};});
@@ -492,9 +542,12 @@ function loop(t){
                ...[...agents,player].map(c=>({y:c.y,draw:()=>drawChar(c,t)}))];
   items.sort((a,b)=>a.y-b.y).forEach(i=>i.draw());
   ctx.drawImage(vig,0,0);
+  drawTools(t);
   drawRoomLabels();
   for(const c of [...agents,player])nameTag(c);
-  for(const c of [...agents,player])bubble(c,t);
+  placed=[];
+  const talking=[...agents,player].filter(c=>c.say&&t<=c.sayUntil).sort((a,b)=>(b.sayAt||0)-(a.sayAt||0));
+  for(const c of talking)bubble(c,t);
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -505,8 +558,11 @@ addEventListener("keydown",e=>{if(document.activeElement===inputEl)return;const 
 addEventListener("keyup",e=>{const k=e.key.length===1?e.key.toLowerCase():e.key;keys[k]=false;});
 addEventListener("blur",()=>{for(const k in keys)keys[k]=false;});
 
+cv.addEventListener("mousemove",e=>{const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*cv.width/r.width,y=(e.clientY-r.top)*cv.height/r.height;
+  hoverTool=toolAt(x,y)||null;cv.title=hoverTool?hoverTool.name+" 열기":"";});
 cv.addEventListener("click",e=>{
   const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*cv.width/r.width,y=(e.clientY-r.top)*cv.height/r.height;
+  const tl=toolAt(x,y);if(tl){window.open(tl.url,"_blank","noopener");return;}
   const hit=[...agents].reverse().find(a=>x>a.x-14&&x<a.x+14&&y>a.y-50&&y<a.y+4);
   if(hit){openProfile(hit);return;}
   closeCards();player.target={x,y};
@@ -519,13 +575,15 @@ function openProfile(a){
   const st=STATUS[a.status];
   prof.innerHTML=`<h3>${a.name}</h3><div class="role">${a.role} · ${a.room}</div>
     <p><span style="color:${st[1]}">●</span> ${st[0]}</p><p>${a.intro}</p>
-    <button class="pill" id="goTalk">💬 대화하기</button><button class="pill" id="closeP">닫기</button>`;
+    <p style="font-size:12px;color:#8fc7bd">🧠 기억 중인 대화: ${Math.floor(a.history.length/2)}개</p>
+    <button class="pill" id="goTalk">💬 대화하기</button><button class="pill" id="forget">🧹 기억 지우기</button><button class="pill" id="closeP">닫기</button>`;
   const r=cv.getBoundingClientRect(),sx=r.width/cv.width;
   let left=a.x*sx+20, top=Math.max(a.y*sx-120,8);
   if(left+270>r.width)left=a.x*sx-280;
   prof.style.left=Math.max(left,8)+"px";prof.style.top=top+"px";prof.classList.remove("hidden");
   document.getElementById("goTalk").onclick=()=>{player.target={x:a.x,y:a.y+30};closeCards();inputEl.focus();};
   document.getElementById("closeP").onclick=()=>{selected=null;closeCards();};
+  document.getElementById("forget").onclick=()=>{clearMemory(a);log("🧹",`${a.name}의 대화 기억을 지웠어요.`,false);openProfile(a);};
 }
 document.getElementById("listBtn").onclick=()=>{
   prof.classList.add("hidden");
@@ -540,17 +598,27 @@ renderStatus();
 
 // ---------- 채팅 ----------
 const logEl=document.getElementById("log");
-function log(who,text){const d=document.createElement("div");d.innerHTML=`<span class="who">${who}</span> ${text.replace(/</g,"&lt;")}`;logEl.appendChild(d);logEl.scrollTop=1e9;}
-function say(c,text,ms=7000){c.say=text;c.sayUntil=performance.now()+ms;}
+// 대화 기억: 이 브라우저에 저장돼요 (새로고침해도 유지, 다른 기기·다른 사람과는 공유 안 됨)
+const MEM_KEY="my-ai-office-memory-v1";
+let logItems=[];
+function saveMemory(){try{localStorage.setItem(MEM_KEY,JSON.stringify({log:logItems.slice(-60),h:Object.fromEntries(agents.map(a=>[a.id,a.history.slice(-30)]))}));}catch(_){}}
+function renderLog(who,text){const d=document.createElement("div");d.innerHTML=`<span class="who">${who}</span> ${String(text).replace(/</g,"&lt;")}`;logEl.appendChild(d);logEl.scrollTop=1e9;}
+function log(who,text,keep=true){renderLog(who,text);if(keep&&!who.startsWith("⚠️")&&who!=="💡"&&who!=="🧹"){logItems.push([who,text]);saveMemory();}}
+function loadMemory(){try{const m=JSON.parse(localStorage.getItem(MEM_KEY)||"null");if(!m)return;
+  agents.forEach(a=>{if(m.h&&Array.isArray(m.h[a.id]))a.history=m.h[a.id];});
+  logItems=Array.isArray(m.log)?m.log:[];
+  if(logItems.length){logItems.slice(-12).forEach(([w,t])=>renderLog(w,t));renderLog("🧠","지난 대화를 기억하고 있어요. (에이전트 프로필에서 지울 수 있어요)");}}catch(_){}}
+function clearMemory(a){if(a){a.history=[];logItems=logItems.filter(([w])=>w!==a.name);}else{agents.forEach(x=>x.history=[]);logItems=[];logEl.innerHTML="";}saveMemory();}
+function say(c,text,ms=7000){c.say=text;c.sayAt=performance.now();c.sayUntil=c.sayAt+ms;}
 
 async function ask(a,text){
-  a.history.push({role:"user",content:text});a.history=a.history.slice(-10);
-  const system=`너는 '${a.name}'라는 AI 에이전트야. 역할: ${a.role}. ${a.intro} 픽셀아트 가상 사무실의 ${a.room}에서 일하고 있고, ${MY_NAME}(사장)과 대화 중이야. 한국어로 2~3문장, 친근하고 짧게 답해.`;
+  a.history.push({role:"user",content:text});a.history=a.history.slice(-30);
+  const system=`너는 '${a.name}'라는 AI 에이전트야. 역할: ${a.role}. ${a.intro} 픽셀아트 가상 사무실의 ${a.room}에서 일하고 있고, ${MY_NAME}(사장)과 대화 중이야. 앞선 대화 내용을 기억하고 이어서 답해. 한국어로 2~3문장, 친근하고 짧게 답해.`;
   try{
     if(location.protocol==="file:")throw 0;
-    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system,messages:a.history})});
-    const j=await r.json();if(!j.reply)throw 0;
-    a.history.push({role:"assistant",content:j.reply});return j.reply;
+    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system,messages:a.history.slice(-12)})});
+    const j=await r.json();if(!j.reply){if(j.error&&!a._warned){a._warned=true;setTimeout(()=>log("⚠️ AI 연결 오류",j.error),50);}throw 0;}
+    a.history.push({role:"assistant",content:j.reply});saveMemory();return j.reply;
   }catch(_){
     a.history.pop();
     const line=a.lines[Math.floor(Math.random()*a.lines.length)];
@@ -571,7 +639,8 @@ inputEl.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.pre
 
 // 가끔 상태가 바뀌어서 살아있는 느낌
 setInterval(()=>{const a=agents[Math.floor(Math.random()*agents.length)];a.status=Math.random()<.7?0:Math.floor(Math.random()*3);},6000);
-setTimeout(()=>{say(agents[0],"사장님 오셨어요! 저한테 와서 말 걸어주세요 👋",6000);},800);
+loadMemory();
+setTimeout(()=>{say(agents[0],logItems.length?"사장님 다시 오셨네요! 지난 얘기 이어서 할까요? 👋":"사장님 오셨어요! 저한테 와서 말 걸어주세요 👋",6000);},800);
 </script>
 </body>
 </html>
